@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="bower_components/d3/d3.min.js"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+    <style>
+        html, body, svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .link {
+            stroke: #2E2E2E;
+            stroke-width: 2px;
+        }
+
+        .node {
+            stroke: #fff;
+            stroke-width: 2px;
+        }
+
+        .textClass {
+            stroke: #323232;
+            font-family: "Lucida Grande", "Droid Sans", Arial, Helvetica, sans-serif;
+            font-weight: normal;
+            stroke-width: .5;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<table border="1">
+    <tr>
+        <th>key</th>
+        <th>value</th>
+    </tr>
+    <tr>
+        <td>id</td>
+        <td class="id-value"></td>
+    </tr>
+    <tr>
+        <td>name</td>
+        <td class="name-value"></td>
+    </tr>
+    <tr>
+        <td>type</td>
+        <td class="type-value"></td>
+    </tr>
+</table>
+<svg id="svg" width="100%" height="100%"></svg>
+
+<script>
+    var graph;
+    function myGraph() {
+
+        this.addNode = function (node) {
+            nodes.push(node);
+            update();
+        };
+
+        this.addLink = function (source, target) {
+            links.push({"source": findNode(source), "target": findNode(target)});
+            update();
+        };
+
+        var findNode = function (id) {
+            for (var i in nodes) {
+                if (nodes[i]["id"] === id) return nodes[i];
+            }
+        };
+
+        var w = document.querySelector("body").clientWidth;
+        var h = document.querySelector("body").clientHeight;
+
+        var color = d3.scale.category10();
+
+        var vis = d3.select("svg")
+                .append('svg:g');
+
+        var force = d3.layout.force().size([w, h]);
+
+        var nodes = force.nodes();
+        var links = force.links();
+
+        var update = function () {
+            var link = vis.selectAll("line")
+                    .data(links, function (d) {
+                        return d.source.id + "-" + d.target.id;
+                    });
+
+            link.enter().append("line")
+                    .attr("id", function (d) {
+                        return d.source.id + "-" + d.target.id;
+                    })
+                    .attr("class", "link");
+            link.exit().remove();
+
+            var node = vis.selectAll("g.node")
+                    .data(nodes, function (d) {
+                        return d.id;
+                    });
+
+            var nodeEnter = node.enter().append("g")
+                    .attr("class", "node")
+                    .call(force.drag);
+
+            nodeEnter.append("svg:circle")
+                    .on('mouseover', function (d) {
+                        d3.select('.id-value').text(d.id);
+                        d3.select('.name-value').text(d.name);
+                        d3.select('.type-value').text(d.type);
+                    })
+                    .on('click', function (d, i) {
+                        jointNodes(d, i);
+                    })
+                    .attr("r", 12)
+                    .attr("id", function (d) {
+                        return "Node;" + d.id;
+                    })
+                    .attr("class", "nodeStrokeClass")
+                    .attr("fill", function (d) {
+                        return color(d.id);
+                    });
+
+            nodeEnter.append("svg:text")
+                    .attr("class", "textClass")
+                    .attr("x", 14)
+                    .attr("y", ".31em")
+                    .text(function (d) {
+                        return d.name;
+                    });
+
+            node.exit().remove();
+
+            force.on("tick", function () {
+
+                node.attr("transform", function (d) {
+                    return "translate(" + d.x + "," + d.y + ")";
+                });
+
+                link
+                        .attr("x1", function (d) {
+                            return d.source.x;
+                        })
+                        .attr("y1", function (d) {
+                            return d.source.y;
+                        })
+                        .attr("x2", function (d) {
+                            return d.target.x;
+                        })
+                        .attr("y2", function (d) {
+                            return d.target.y;
+                        });
+            });
+
+            // force layoutを更新
+            force
+                    .gravity(.01)
+                    .charge(-80000)
+                    .friction(0)
+                    .linkDistance(200)
+                    .size([w, h])
+                    .start();
+        };
+
+        function jointNodes(d, i) {
+            d3.json('resources/around_' + d.name + '.json', function (error, json) {
+                if (error) return console.warn(error);
+
+                for (var i in json.nodes) {
+                    graph.addNode(json.nodes[i]);
+                }
+                for (var j in json.links) {
+                    graph.addLink(json.links[j].source, json.links[j].target);
+                }
+                keepNodesOnTop();
+            })
+
+        }
+
+        update();
+    }
+
+    function drawGraph() {
+        graph = new myGraph("#svgdiv");
+
+        d3.json('resources/around_node1.json', function (json) {
+            for (var i in json.nodes) {
+                graph.addNode(json.nodes[i]);
+            }
+            for (var j in json.links) {
+                graph.addLink(json.links[j].source, json.links[j].target);
+            }
+            keepNodesOnTop();
+        });
+
+    }
+
+    drawGraph();
+
+    // because of the way the network is created, nodes are created first, and links second,
+    // so the lines were on top of the nodes, this just reorders the DOM to put the svg:g on top
+    function keepNodesOnTop() {
+        $(".nodeStrokeClass").each(function (index) {
+            var gnode = this.parentNode;
+            gnode.parentNode.appendChild(gnode);
+        });
+    }
+
+</script>
+</body>
+</html>
